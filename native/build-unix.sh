@@ -4,10 +4,10 @@
 #
 # Usage: native/build-unix.sh [hackrf-git-ref]
 #
-# The ref may be a branch, a tag or a full commit hash. libusb stays a separate
-# shared library because it is LGPL-2.1: keeping it out of libhackrf lets users
-# replace it. It is built without udev so the Linux binaries do not need
-# libudev at runtime.
+# The ref may be a branch, a tag or a full commit hash. libusb is built only to
+# link against: at runtime libhackrf uses the libusb that jlibusb supplies,
+# loaded from the same directory, so the jar does not contain libusb. It is
+# built without udev, as jlibusb's is.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -104,21 +104,19 @@ cmake --build build-hackrf --parallel "$JOBS" >/dev/null
 
 echo "=== packaging $PLATFORM ==="
 if [ "$OS" = linux ]; then
-    cp -L "$USB_PREFIX/lib/libusb-1.0.so.0" "$OUT/libusb-1.0.so.0"
     cp -L build-hackrf/libhackrf.so "$OUT/libhackrf.so"
     chmod 755 "$OUT"/*
     # Only glibc and libusb may remain as dependencies.
     readelf -d "$OUT/libhackrf.so" | grep -E 'NEEDED|RUNPATH|RPATH'
 else
-    cp -L "$USB_PREFIX/lib/libusb-1.0.0.dylib" "$OUT/libusb-1.0.0.dylib"
     cp -L build-hackrf/libhackrf.dylib "$OUT/libhackrf.dylib"
     chmod 755 "$OUT"/*
-    # Point libhackrf at the bundled libusb, not the absolute build path, and
-    # re-sign because install_name_tool invalidates the ad-hoc signatures.
-    install_name_tool -id @rpath/libusb-1.0.0.dylib "$OUT/libusb-1.0.0.dylib"
+    # Point libhackrf at jlibusb's libusb, which is extracted next to it, not
+    # the absolute build path, and re-sign because install_name_tool
+    # invalidates the ad-hoc signature.
     install_name_tool -id @rpath/libhackrf.dylib "$OUT/libhackrf.dylib"
     install_name_tool -change "$USB_LIB" @loader_path/libusb-1.0.0.dylib "$OUT/libhackrf.dylib"
-    codesign -f -s - "$OUT"/*.dylib
+    codesign -f -s - "$OUT/libhackrf.dylib"
     otool -L "$OUT/libhackrf.dylib"
     if otool -L "$OUT/libhackrf.dylib" | grep -qF "$WORK"; then
         echo "libhackrf still refers to the build directory" >&2
@@ -136,7 +134,6 @@ fi
 # The library sources are BSD-3-Clause, stated at the top of hackrf.c. The GPL
 # in COPYING covers upstream's firmware and tools, which jHackRF does not ship.
 sed -n '1,/^\*\//p' hackrf/host/libhackrf/src/hackrf.c > "$ROOT/dist/native/licenses/libhackrf-LICENSE"
-cp "libusb-$LIBUSB_VERSION/COPYING" "$ROOT/dist/native/licenses/libusb-COPYING"
 cat > "$OUT/build-info.properties" <<INFO
 hackrf.ref=$REF
 hackrf.commit=$UPSTREAM_COMMIT
