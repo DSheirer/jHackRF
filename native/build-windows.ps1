@@ -1,5 +1,6 @@
-# Builds hackrf.dll for the host architecture with MSVC and copies it, with the
-# libusb DLL, to dist\native\windows-<arch>.
+# Builds hackrf.dll for the host architecture with MSVC and copies it to
+# dist\native\windows-<arch>. At runtime hackrf.dll uses the libusb DLL that
+# jlibusb supplies, so only the import library is used here.
 #
 # Usage: native\build-windows.ps1 -Arch x64|ARM64 [-Ref <hackrf-git-ref>]
 #
@@ -97,7 +98,6 @@ Write-Host "=== packaging $Platform ==="
 $Dll = Get-ChildItem -Recurse -Path build -Filter hackrf.dll | Select-Object -First 1
 if (-not $Dll) { throw 'hackrf.dll was not produced' }
 Copy-Item $Dll.FullName "$Out\hackrf.dll"
-Copy-Item "$Work\usb\$UsbDir\libusb-1.0.dll" "$Out\libusb-1.0.dll"
 # The library sources are BSD-3-Clause, stated at the top of hackrf.c. The GPL
 # in COPYING covers upstream's firmware and tools, which jHackRF does not ship.
 $Source = Get-Content 'hackrf\host\libhackrf\src\hackrf.c'
